@@ -55,6 +55,7 @@ public class CSharpPlugin implements Plugin {
     extensions.add(CSharpSourceImporter.class);
     extensions.add(NoSonarAndCommentedOutLocSensor.class);
     extensions.add(BinaryDependenciesSensor.class);
+    extensions.add(ProjectDependenciesSensor.class);
     return extensions;
   }
 

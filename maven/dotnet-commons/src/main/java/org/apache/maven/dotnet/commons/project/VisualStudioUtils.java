@@ -26,11 +26,15 @@ package org.apache.maven.dotnet.commons.project;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+//import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
+//import java.util.Collection;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -346,6 +350,8 @@ public class VisualStudioUtils {
           .compile("/vst:Project/vst:PropertyGroup[contains(@Condition,'Release')]/vst:OutputPath");
       XPathExpression silverlightExpression = xpath
           .compile("/vst:Project/vst:PropertyGroup/vst:SilverlightApplication");
+      XPathExpression projectGuidExpression = xpath
+          .compile("/vst:Project/vst:PropertyGroup/vst:ProjectGuid");
 
       VisualStudioProject project = new VisualStudioProject();
       project.setProjectFile(projectFile);
@@ -365,6 +371,11 @@ public class VisualStudioUtils {
           projectFile);
       String releaseOutput = extractProjectProperty(releaseOutputExpression,
           projectFile);
+      String projectGuid = extractProjectProperty(projectGuidExpression, 
+          projectFile);
+      
+      // because the GUID starts with { and ends with }, remove these characters
+      projectGuid = projectGuid.substring(1, projectGuid.length()-2);
 
       // Assess if the artifact is a library or an executable
       ArtifactType type = ArtifactType.LIBRARY;
@@ -372,6 +383,7 @@ public class VisualStudioUtils {
         type = ArtifactType.EXECUTABLE;
       }
       // The project is populated
+      project.setProjectGuid(UUID.fromString(projectGuid));
       project.setProjectFile(projectFile);
       project.setType(type);
       project.setDirectory(projectDir);
@@ -386,6 +398,43 @@ public class VisualStudioUtils {
 
       project.setBinaryReferences(getBinaryReferences(xpath, projectFile,
           project));
+      
+      // ???
+      Thread.currentThread().setContextClassLoader(savedClassloader);
+      
+      project.setProjectReferences(getProjectReferences(xpath, projectFile,
+              project));
+      
+      // Get all source files to find the assembly version
+      // [assembly: AssemblyVersion("1.0.0.0")]
+      Collection<SourceFile> sourceFiles = project.getSourceFiles();
+      
+      String version = null;
+      
+      // first parse: in general, it's in the "Properties\AssemblyInfo.cs"
+      for(SourceFile file : sourceFiles)
+      {
+    	  if(file.getName().equalsIgnoreCase("assemblyinfo.cs"))
+    	  {
+    		  version = tryToGetVersion(file);
+    		  
+    		  if(version != null){
+    			  break;
+    		  }
+    	  }
+      }
+      
+      // second parse: try to read all files
+      for(SourceFile file : sourceFiles)
+      {
+    	  version = tryToGetVersion(file);
+		  
+		  if(version != null){
+			  break;
+		  }
+      }
+      
+      project.setAssemblyVersion(version);
 
       return project;
     } catch (XPathExpressionException xpee) {
@@ -396,6 +445,27 @@ public class VisualStudioUtils {
       Thread.currentThread().setContextClassLoader(savedClassloader);
     }
   }
+
+private static String tryToGetVersion(SourceFile file) {
+	String content;
+	try {
+		content = org.apache.commons.io.FileUtils.readFileToString(file.getFile(), "UTF-8");
+		if (content.startsWith("\uFEFF") || content.startsWith("\uFFFE")) {
+	          content = content.substring(1);
+	        }
+		
+		Pattern p = Pattern.compile("^[^/]*\\[assembly:\\sAssemblyVersion\\(\"([^\"]*)\"\\)\\].*$", Pattern.MULTILINE);
+		Matcher m = p.matcher(content);
+		if(m.find())
+		{
+			return m.group(1);
+		}
+
+	} catch (IOException e) {
+		log.warn("Not able to read the file "+file.getFile().getAbsolutePath()+" to find project version", e);
+	}
+	return null;
+}
 
   private static List<BinaryReference> getBinaryReferences(XPath xpath, File projectFile, VisualStudioProject project)
       throws DotNetProjectException {
@@ -459,6 +529,49 @@ public class VisualStudioUtils {
     }
     return result;
   }
+  
+  private static List<ProjectReference> getProjectReferences(XPath xpath, File projectFile, VisualStudioProject project)
+  throws DotNetProjectException {
+List<ProjectReference> result = new ArrayList<ProjectReference>();
+try {
+
+  XPathExpression projectRefExpression = xpath.compile("/vst:Project/vst:ItemGroup/vst:ProjectReference");
+  
+  InputSource inputSource = new InputSource(new FileInputStream(projectFile));
+  NodeList nodes = (NodeList) projectRefExpression.evaluate(inputSource, XPathConstants.NODESET);
+  
+  int countNodes = nodes.getLength();
+  for (int idxNode = 0; idxNode < countNodes; idxNode++) {
+    Element includeElement = (Element) nodes.item(idxNode);
+    // We filter the files
+    String includeAttr = includeElement.getAttribute("Include");
+    if (StringUtils.isEmpty(includeAttr)) {
+      log.debug("Project reference ignored, Include attribute missing");
+    } else {
+      ProjectReference reference = new ProjectReference();
+      
+      String projectPath = projectFile.getParent()+"\\"+includeAttr;
+      File referencedProjectFile = new File(projectPath);
+      
+      VisualStudioProject referencedProject = getProject(referencedProjectFile);
+      
+      reference.setName(referencedProject.getName());
+      reference.setPath(referencedProject.getDirectory().getPath());
+      reference.setGuid(referencedProject.getProjectGuid());
+      
+      result.add(reference);
+    }
+  }
+
+} catch (XPathExpressionException exception) {
+  // Should not happen
+  log.debug("xpath error", exception);
+} catch (FileNotFoundException exception) {
+  // Should not happen
+  log.debug("project file not found", exception);
+}
+return result;
+}
 
   public static VisualStudioProject getWebProject(File solutionRoot,
       File projectRoot, String projectName, String definition)
