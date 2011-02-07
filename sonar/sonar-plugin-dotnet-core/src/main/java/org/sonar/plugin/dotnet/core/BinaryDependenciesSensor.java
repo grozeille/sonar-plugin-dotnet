@@ -32,60 +32,86 @@ import org.sonar.api.batch.Sensor;
 import org.sonar.api.batch.SensorContext;
 import org.sonar.api.batch.SonarIndex;
 import org.sonar.api.design.Dependency;
+import org.sonar.api.measures.CoreMetrics;
+import org.sonar.api.measures.Measure;
+import org.sonar.api.measures.PersistenceMode;
 import org.sonar.api.resources.Library;
 import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
 import org.sonar.plugin.dotnet.core.project.VisualUtils;
+import org.sonar.plugin.dotnet.core.resource.CLRAssembly;
 
 public class BinaryDependenciesSensor implements Sensor {
 
-  private final static Logger log = LoggerFactory.getLogger(BinaryDependenciesSensor.class);
-  
-  private final SonarIndex index;
-  
-  public BinaryDependenciesSensor(SonarIndex index) {
-    this.index = index;
-  }
+	private final static Logger log = LoggerFactory
+			.getLogger(BinaryDependenciesSensor.class);
 
-  @Override
-  public void analyse(Project project, SensorContext context) {
-    
-    try {
-      VisualStudioSolution solution = VisualUtils.getSolution(project);
-      List<VisualStudioProject> projects = solution.getProjects();
-      for (VisualStudioProject vsProject : projects) {
-        // TODO find a way to get dependencies associated to assemblies
-        // CLRAssembly assembly = new CLRAssembly(vsProject);
-        // Resource<?> savedAssembly = context.getResource(assembly);
-        List<BinaryReference> binaryReferences = vsProject
-            .getBinaryReferences();
-        for (BinaryReference binaryReference : binaryReferences) {
-          Resource<?> lib = 
-            new Library(binaryReference.getAssemblyName(), binaryReference.getVersion());
+	private final SonarIndex index;
 
-          Resource<?> savedLib = context.getResource(lib);
-          if (savedLib == null) {
-            context.saveResource(lib);
-            savedLib = context.getResource(lib);
-          } 
-          Dependency dependency = new Dependency(index.getProject(), savedLib);
-          dependency.setUsage(binaryReference.getScope());
-          dependency.setWeight(1);
-          context.saveDependency(dependency);
-        }
-      }
+	public BinaryDependenciesSensor(SonarIndex index) {
+		this.index = index;
+	}
 
-    } catch (DotNetProjectException e) {
-      log.error("Error during binary dependency analysis", e);
-    }
+	@Override
+	public void analyse(Project project, SensorContext context) {
 
-  }
+		try {
+			VisualStudioSolution solution = VisualUtils.getSolution(project);
+			List<VisualStudioProject> projects = solution.getProjects();
+			for (VisualStudioProject vsProject : projects) {
+				
+				// find the referenced project in the Maven modules
+				Resource<?> subProject = CLRAssembly.fromName(project,
+						vsProject.getAssemblyName());
+				
+				Resource<?> savedSubPrj = context
+						.getResource(subProject);
+				if (savedSubPrj == null) {
+					context.saveResource(subProject);
+					savedSubPrj = context.getResource(subProject);
+				}
+				subProject = savedSubPrj;
+				
+				// TODO find a way to get dependencies associated to assemblies
+				// CLRAssembly assembly = new CLRAssembly(vsProject);
+				// Resource<?> savedAssembly = context.getResource(assembly);
+				List<BinaryReference> binaryReferences = vsProject
+						.getBinaryReferences();
+				for (BinaryReference binaryReference : binaryReferences) {
+					Resource<?> lib = new Library(binaryReference
+							.getAssemblyName(), binaryReference.getVersion());
 
-  @Override
-  public boolean shouldExecuteOnProject(Project project) {
-    String packaging = project.getPackaging();
-    // We only accept the "sln" packaging
-    return "sln".equals(packaging);
-  }
+					Resource<?> savedLib = context.getResource(lib);
+					if (savedLib == null) {
+						context.saveResource(lib);
+						savedLib = context.getResource(lib);
+					}
+					Dependency dependency = new Dependency(subProject, savedLib);
+					dependency.setUsage("compile");
+					dependency.setWeight(1);
+					context.saveDependency(dependency);
+				/*
+					String json = "[{\"i\":"+savedLib.getId()+
+						",\"n\":\""+savedLib.getKey()+
+						"\",\"q\":\""+savedLib.getQualifier()+"\",\"v\":[{}]";
+				
+					Measure measure = new Measure(CoreMetrics.DEPENDENCY_MATRIX, json);
+					measure.setPersistenceMode(PersistenceMode.DATABASE);
+					context.saveMeasure(measure);			    */
+				}
+			}
+
+		} catch (DotNetProjectException e) {
+			log.error("Error during binary dependency analysis", e);
+		}
+
+	}
+
+	@Override
+	public boolean shouldExecuteOnProject(Project project) {
+		String packaging = project.getPackaging();
+		// We only accept the "sln" packaging
+		return "sln".equals(packaging);
+	}
 
 }

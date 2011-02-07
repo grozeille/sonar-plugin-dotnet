@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -48,17 +49,22 @@ public class VisualStudioProject {
   private File projectFile;
   private ArtifactType type;
   private String assemblyName;
+  private String assemblyVersion;
   private String realAssemblyName; // assembly name found in the csproj file no matter what
   private String rootNamespace;
+  private UUID projectGuid;
   protected File debugOutputDir;
   protected File releaseOutputDir;
   protected File directory;
+  
   private boolean test;
   private boolean silverlightProject;
   private Map<File, SourceFile> sourceFileMap;
   
   private List<BinaryReference> binaryReferences = new ArrayList<BinaryReference>();
 
+  private List<ProjectReference> projectReferences = new ArrayList<ProjectReference>();
+  
   /**
    * Builds a {@link VisualStudioProject} ...
    * 
@@ -131,6 +137,15 @@ public class VisualStudioProject {
     return this.type;
   }
 
+
+  public UUID getProjectGuid() {
+	return projectGuid;
+	}
+	
+	public void setProjectGuid(UUID projectGuid) {
+		this.projectGuid = projectGuid;
+	}
+  
   /**
    * Gets the debug generated artifact.
    * 
@@ -176,6 +191,14 @@ public class VisualStudioProject {
    */
   public String getAssemblyName() {
     return this.assemblyName;
+  }
+  
+  public String getAssemblyVersion(){
+	  return this.assemblyVersion;
+  }
+  
+  public void setAssemblyVersion(String assemblyVersion){
+	  this.assemblyVersion = assemblyVersion;
   }
 
   /**
@@ -504,9 +527,16 @@ public class VisualStudioProject {
   public List<BinaryReference> getBinaryReferences() {
     return binaryReferences;
   }
+  
+  public List<ProjectReference> getProjectReferences() {
+	    return projectReferences;
+	  }
 
   public void setBinaryReferences(List<BinaryReference> binaryReferences) {
     this.binaryReferences = binaryReferences;
   }
-
+  
+  public void setProjectReferences(List<ProjectReference> projectReferences) {
+	    this.projectReferences = projectReferences;
+	  }
 }

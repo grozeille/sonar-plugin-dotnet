@@ -24,6 +24,7 @@
 package org.sonar.plugin.dotnet.core.resource;
 
 import java.io.File;
+import java.util.Date;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.maven.dotnet.commons.project.DotNetProjectException;
@@ -39,7 +40,7 @@ import org.sonar.plugin.dotnet.core.project.VisualUtils;
  * 
  * @author Jose CHILLAN Sep 1, 2009
  */
-public class CLRAssembly extends AbstractCSharpResource<Project> {
+public class CLRAssembly extends Project {
   private final VisualStudioProject visualProject;
 
   /**
@@ -57,7 +58,7 @@ public class CLRAssembly extends AbstractCSharpResource<Project> {
 
       VisualStudioProject visualProject = solution.getProject(assemblyName);
       if (visualProject != null) {
-        CLRAssembly assemblyResource = new CLRAssembly(visualProject);
+        CLRAssembly assemblyResource = forVisualStudioProject(project, visualProject);
         return assemblyResource;
       }
     } catch (DotNetProjectException e) {
@@ -78,12 +79,32 @@ public class CLRAssembly extends AbstractCSharpResource<Project> {
       VisualStudioSolution solution = VisualUtils.getSolution(project);
       VisualStudioProject visualProject = solution.getProjectByLocation(file);
       if (visualProject != null) {
-        return new CLRAssembly(visualProject);
+        return forVisualStudioProject(project, visualProject);
       }
     } catch (Exception e) {
       // Nothing special
     }
     return null;
+  }
+  
+  public static CLRAssembly forVisualStudioProject(Project parent, VisualStudioProject project){
+	String key = parent.getKey()+":"+ CSharp.createKey(project.getAssemblyName(), null, null);
+	
+	CLRAssembly clrAssembly = null;
+	
+  	for(Project p : parent.getModules()){
+  		if(p.getKey().equals(key)){
+  			clrAssembly = (CLRAssembly)p;
+  			break;
+  		}
+  	}
+  	
+  	if(clrAssembly == null){
+  		clrAssembly = new CLRAssembly(parent, project);  		
+  	}
+  	
+  	return clrAssembly;
+  	
   }
 
   /**
@@ -92,13 +113,23 @@ public class CLRAssembly extends AbstractCSharpResource<Project> {
    * @param project
    *          the visual project link
    */
-  public CLRAssembly(VisualStudioProject project) {
-    super(SCOPE_SPACE, QUALIFIER_MODULE);
+  protected CLRAssembly(Project parent, VisualStudioProject project) {	
+	super("");
+	String assemblyName = project.getAssemblyName();
+    //super();
+	String key = parent.getKey()+":"+ CSharp.createKey(assemblyName, null, null);
+	setKey(key);
     this.visualProject = project;
-    String assemblyName = project.getAssemblyName();
-    String key = CSharp.createKey(assemblyName, null, null);
-    setKey(key);
-    setName("Project " + assemblyName);
+    setName("Project " + project.getAssemblyName());
+    setParent(parent);
+    setAnalysisDate(parent.getAnalysisDate());
+    setAnalysisType(parent.getAnalysisType());
+    setConfiguration(parent.getConfiguration());
+    setAnalysisVersion(project.getAssemblyVersion());
+    setLanguage(CSharp.INSTANCE);
+    setLanguageKey(CSharp.KEY);
+    setLatestAnalysis(true);
+    setPackaging(parent.getPackaging());
   }
 
   /**
