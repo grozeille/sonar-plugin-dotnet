@@ -29,14 +29,15 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.maven.dotnet.commons.project.VisualStudioProject;
 import org.sonar.api.resources.Project;
 import org.sonar.plugin.dotnet.core.CSharp;
+import org.sonar.plugin.dotnet.core.project.VisualUtils;
 
 /**
  * A folder from an assembly that contains some source code.
  * 
  * @author Jose CHILLAN Sep 3, 2009
  */
-public class CSharpFolder extends AbstractCSharpResource<CLRAssembly> {
-  private CLRAssembly assembly;
+public class CSharpFolder extends AbstractCSharpResource<Project> {
+  private Project assembly;
 
   /**
    * Creates a CSharp folder from a directory.
@@ -48,7 +49,7 @@ public class CSharpFolder extends AbstractCSharpResource<CLRAssembly> {
    * @return the new folder, or <code>null</code> if a problem occurred
    */
   public static CSharpFolder fromDirectory(Project project, File directory) {
-    CLRAssembly assembly = CLRAssembly.forFile(project, directory);
+    Project assembly = VisualUtils.getProjectForFile(project, directory);
     if (assembly != null) {
       return new CSharpFolder(assembly, directory);
     }
@@ -63,12 +64,12 @@ public class CSharpFolder extends AbstractCSharpResource<CLRAssembly> {
    * @param file
    *          the folder location
    */
-  public CSharpFolder(CLRAssembly assembly, File directory) {
+  public CSharpFolder(Project assembly, File directory) {
     super(SCOPE_SPACE, QUALIFIER_DIRECTORY);
     this.assembly = assembly;
-    VisualStudioProject visualProject = assembly.getVisualProject();
+    VisualStudioProject visualProject = VisualUtils.getVisualStudioProject(assembly);
     String folder = visualProject.getRelativePath(directory);
-    String assemblyName = assembly.getAssemblyName();
+    String assemblyName = visualProject.getAssemblyName();
     String key = CSharp.createKey(assemblyName, folder, null);
     setKey(key);
     String name;
@@ -102,7 +103,7 @@ public class CSharpFolder extends AbstractCSharpResource<CLRAssembly> {
    * @return
    */
   @Override
-  public CLRAssembly getParent() {
+  public Project getParent() {
     return assembly;
   }
 }

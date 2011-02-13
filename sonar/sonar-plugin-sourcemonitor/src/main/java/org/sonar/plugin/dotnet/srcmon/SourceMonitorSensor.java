@@ -43,7 +43,6 @@ import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
 import org.sonar.plugin.dotnet.core.AbstractDotnetSensor;
 import org.sonar.plugin.dotnet.core.project.VisualUtils;
-import org.sonar.plugin.dotnet.core.resource.CLRAssembly;
 import org.sonar.plugin.dotnet.core.resource.CSharpFile;
 import org.sonar.plugin.dotnet.core.resource.CSharpFileLocator;
 import org.sonar.plugin.dotnet.core.resource.CSharpFolder;
@@ -206,7 +205,7 @@ public class SourceMonitorSensor extends AbstractDotnetSensor {
   private void storeProjectMetrics(Project project, SensorContext context) {
     for (ProjectMetrics metrics : projects.values()) {
       String assemblyName = metrics.getAssemblyName();
-      CLRAssembly resource = CLRAssembly.fromName(project, assemblyName);
+      Project resource = VisualUtils.getProjectFromName(project, assemblyName);
       storeMetrics(project, context, metrics, resource);
       context.saveMeasure(resource, CoreMetrics.PACKAGES,
           (double) metrics.getCountNamespaces());

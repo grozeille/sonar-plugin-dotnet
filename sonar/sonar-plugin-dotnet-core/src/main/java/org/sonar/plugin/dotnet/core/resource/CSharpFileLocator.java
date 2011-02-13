@@ -56,7 +56,7 @@ public class CSharpFileLocator implements BatchExtension {
     final CSharpFile result;
     if (csFilesProjectMap.containsKey(absoluteFile)) {
       VisualStudioProject visualProject = csFilesProjectMap.get(absoluteFile);
-      result = CSharpFile.from(visualProject, absoluteFile, unitTest);
+      result = CSharpFile.from(project, visualProject, absoluteFile, unitTest);
     } else {
       log.debug(
           "file {} ignored (i.e. link file, file not referenced by any project, or project/file excluded)",
