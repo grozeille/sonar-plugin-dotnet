@@ -50,7 +50,6 @@ import org.sonar.api.utils.ParsingUtils;
 import org.sonar.plugin.dotnet.core.AbstractDotnetSensor;
 import org.sonar.plugin.dotnet.core.project.VisualUtils;
 import org.sonar.plugin.dotnet.core.resource.CSharpFile;
-import org.sonar.plugin.dotnet.core.resource.CLRAssembly;
 import org.sonar.plugin.dotnet.core.resource.CSharpFileLocator;
 import org.sonar.plugin.dotnet.core.resource.CSharpFolder;
 import org.sonar.plugin.dotnet.coverage.model.Coverable;
@@ -190,7 +189,7 @@ public class CoverageSensor extends AbstractDotnetSensor {
 
       VisualStudioProject visualProject = solution.getProject(assemblyName);
       if (visualProject != null) {
-        CLRAssembly assemblyResource = new CLRAssembly(visualProject);
+        Project assemblyResource = VisualUtils.getProjectForVisualStudioProject(project, visualProject);
         context.saveMeasure(assemblyResource, CoreMetrics.COVERAGE,
             convertPercentage(coverage));
         context.saveMeasure(assemblyResource, CoverageMetrics.ELOC,

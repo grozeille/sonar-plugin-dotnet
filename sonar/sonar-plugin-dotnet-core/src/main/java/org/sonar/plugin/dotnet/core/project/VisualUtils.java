@@ -51,6 +51,7 @@ import org.sonar.api.resources.DefaultProjectFileSystem;
 import org.sonar.api.resources.Project;
 import org.sonar.api.utils.SonarException;
 import org.sonar.api.utils.WildcardPattern;
+import org.sonar.plugin.dotnet.core.CSharp;
 
 /**
  * Utility classes for Visual Studio projects associated to Maven projects.
@@ -65,6 +66,9 @@ public final class VisualUtils {
   // analysis
   private final static Map<MavenProject, VisualStudioSolution> solutionCache = Collections
       .synchronizedMap(new HashMap<MavenProject, VisualStudioSolution>());
+  
+  private final static Map<VisualStudioProject, Project> projectCache = Collections
+  		.synchronizedMap(new HashMap<VisualStudioProject, Project>());
 
   /**
    * Extracts a visual studio solution if the project is a valid solution.
@@ -87,6 +91,99 @@ public final class VisualUtils {
       solutionCache.put(mavenProject, solution);
     }
     return solution;
+  }
+  
+  /**
+   * Gets an assembly from its name.
+   * 
+   * @param project
+   *          the solution project that should contains the assembly
+   * @param assemblyName
+   *          the name of the assembly
+   * @return a new assembly, or <code>null</code> if the assembly was not found
+   */
+  public static Project getProjectFromName(Project project, String assemblyName) {
+    try {
+      VisualStudioSolution solution = VisualUtils.getSolution(project);
+
+      VisualStudioProject visualProject = solution.getProject(assemblyName);
+      if (visualProject != null) {
+    	  Project assemblyResource = getProjectForVisualStudioProject(project, visualProject);
+        return assemblyResource;
+      }
+    } catch (DotNetProjectException e) {
+      // Do nothing
+    }
+    return null;
+  }
+  
+  public static VisualStudioProject getVisualStudioProject(Project project){
+	  try {
+	      VisualStudioSolution solution = VisualUtils.getSolution(project.getParent());
+
+	      // extract the assemblyName from the key
+	      String assemblyName = project.getKey().substring(project.getParent().getKey().length()+1);
+	      
+	      VisualStudioProject visualProject = solution.getProject(assemblyName);
+
+	      return visualProject;
+	    } catch (DotNetProjectException e) {
+	      // Do nothing
+	    }
+	    return null;
+  }
+  
+  /**
+   * Gets the assembly for a given file.
+   * 
+   * @param project
+   * @param file
+   * @return
+   */
+  public static Project getProjectForFile(Project project, File file) {
+    try {
+      VisualStudioSolution solution = VisualUtils.getSolution(project);
+      VisualStudioProject visualProject = solution.getProjectByLocation(file);
+      if (visualProject != null) {
+        return getProjectForVisualStudioProject(project, visualProject);
+      }
+    } catch (Exception e) {
+      // Nothing special
+    }
+    return null;
+  }
+  
+  public static Project getProjectForVisualStudioProject(Project parent, VisualStudioProject visualStudioProject){
+	String assemblyName = visualStudioProject.getAssemblyName();
+	  
+	String key = parent.getKey()+":"+ CSharp.createKey(assemblyName, null, null);
+	
+	Project project = null;
+	
+  	for(Project p : parent.getModules()){
+  		if(p.getKey().equals(key)){
+  			project = (Project)p;
+  			break;
+  		}
+  	}
+  	
+  	if(project == null){
+  		project = new Project(key);
+  		  	    
+  		project.setName("Project " + assemblyName);
+  		project.setParent(parent);
+  		project.setAnalysisDate(parent.getAnalysisDate());
+  		project.setAnalysisType(parent.getAnalysisType());
+  		project.setConfiguration(parent.getConfiguration());
+  	    project.setAnalysisVersion(visualStudioProject.getAssemblyVersion());
+  	    project.setLanguage(CSharp.INSTANCE);
+  	    project.setLanguageKey(CSharp.KEY);
+  	    project.setLatestAnalysis(true);
+  	    project.setPackaging(parent.getPackaging());
+  	}
+  	
+  	return project;
+  	
   }
 
   /**

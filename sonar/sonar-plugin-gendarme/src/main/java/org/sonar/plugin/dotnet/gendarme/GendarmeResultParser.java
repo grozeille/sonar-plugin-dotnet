@@ -36,12 +36,13 @@ import org.sonar.api.rules.Rule;
 import org.sonar.api.rules.RulesManager;
 import org.sonar.api.rules.Violation;
 import org.sonar.plugin.dotnet.core.AbstractXmlParser;
-import org.sonar.plugin.dotnet.core.resource.CLRAssembly;
+import org.sonar.plugin.dotnet.core.project.VisualUtils;
 import org.sonar.plugin.dotnet.core.resource.CSharpFileLocator;
 import org.w3c.dom.Element;
 
 import org.apache.maven.dotnet.commons.GeneratedCodeFilter;
 import org.apache.maven.dotnet.commons.project.SourceFile;
+import org.apache.maven.dotnet.commons.project.VisualStudioProject;
 
 public class GendarmeResultParser extends AbstractXmlParser {
 
@@ -98,11 +99,12 @@ public class GendarmeResultParser extends AbstractXmlParser {
           continue;
         }
         
-        CLRAssembly assembly = CLRAssembly.fromName(project, assemblyName);
+        Project assembly = VisualUtils.getProjectFromName(project, assemblyName);
+        VisualStudioProject visualStudioProject = VisualUtils.getVisualStudioProject(assembly);
         if (StringUtils.contains(key, "Assembly")) {
           // we assume we have a violation at the
           // assembly level
-          filePath = assembly.getVisualProject().getDirectory()
+          filePath = visualStudioProject.getDirectory()
               .getAbsolutePath()
               + File.separator
               + "Properties"
@@ -114,7 +116,7 @@ public class GendarmeResultParser extends AbstractXmlParser {
             // we will try to find a cs file that match with the class name
             final String className = StringUtils.substringBeforeLast(
                 StringUtils.substringAfterLast(location, "."), "/");
-            Collection<SourceFile> sourceFiles = assembly.getVisualProject()
+            Collection<SourceFile> sourceFiles = visualStudioProject
                 .getSourceFiles();
 
             SourceFile sourceFile = null;

@@ -31,7 +31,8 @@ import org.apache.maven.dotnet.commons.project.VisualStudioProject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.resources.AbstractLanguage;
-import org.sonar.plugin.dotnet.core.resource.CLRAssembly;
+import org.sonar.api.resources.Project;
+import org.sonar.plugin.dotnet.core.project.VisualUtils;
 
 /**
  * The definition of the CSharp language for Sonar.
@@ -73,15 +74,15 @@ public class CSharp extends AbstractLanguage {
    *          the path of the source file
    * @return the generated key
    */
-  public static String createKey(CLRAssembly assembly, File sourcePath) {
-    VisualStudioProject visualProject = assembly.getVisualProject();
+  public static String createKey(Project assembly, File sourcePath) {
+    VisualStudioProject visualProject = VisualUtils.getVisualStudioProject(assembly);
     SourceFile sourceFile = visualProject.getFile(sourcePath);
     final String key;
     if (sourceFile == null) {
       log.warn("A source file is not included in the project : " + sourcePath);
       key = null;
     } else {
-      String assemblyName = assembly.getAssemblyName();
+      String assemblyName = visualProject.getAssemblyName();
       String folder = sourceFile.getFolder();
       String fileName = sourceFile.getName();
       key = createKey(assemblyName, folder, fileName);

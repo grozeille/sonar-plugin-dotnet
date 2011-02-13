@@ -39,7 +39,6 @@ import org.sonar.api.resources.Library;
 import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
 import org.sonar.plugin.dotnet.core.project.VisualUtils;
-import org.sonar.plugin.dotnet.core.resource.CLRAssembly;
 
 public class BinaryDependenciesSensor implements Sensor {
 
@@ -61,7 +60,7 @@ public class BinaryDependenciesSensor implements Sensor {
 			for (VisualStudioProject vsProject : projects) {
 				
 				// find the referenced project in the Maven modules
-				Resource<?> subProject = CLRAssembly.fromName(project,
+				Resource<?> subProject = VisualUtils.getProjectFromName(project,
 						vsProject.getAssemblyName());
 				
 				Resource<?> savedSubPrj = context

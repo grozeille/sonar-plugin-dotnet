@@ -32,6 +32,7 @@ import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
 import org.sonar.api.utils.WildcardPattern;
 import org.sonar.plugin.dotnet.core.CSharp;
+import org.sonar.plugin.dotnet.core.project.VisualUtils;
 
 /**
  * A Resource corresponding to a CSharp file
@@ -62,13 +63,13 @@ public class CSharpFile extends AbstractCSharpResource<CSharpFolder> {
     return new CSharpFile(folder, file, unitTest);
   }
   
-  protected static CSharpFile from(VisualStudioProject project, File file, boolean unitTest) {
+  protected static CSharpFile from(Project parent, VisualStudioProject project, File file, boolean unitTest) {
     if (unitTest) {
       Log.error("test " + file);
     }
 
     File directory = file.getParentFile();
-    CLRAssembly assembly = new CLRAssembly(project);
+    Project assembly = VisualUtils.getProjectForVisualStudioProject(parent, project);
     CSharpFolder folder = new CSharpFolder(assembly, directory);
     return new CSharpFile(folder, file, unitTest);
   }
@@ -85,7 +86,7 @@ public class CSharpFile extends AbstractCSharpResource<CSharpFolder> {
         : Resource.QUALIFIER_CLASS));
     this.folder = folder;
     this.fileName = file.getName();
-    CLRAssembly assembly = folder.getParent();
+    Project assembly = folder.getParent();
     String key = CSharp.createKey(assembly, file);
     if (key == null) {
       throw new InvalidResourceException("The file " + file
