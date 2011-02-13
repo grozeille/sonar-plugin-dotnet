@@ -12,9 +12,6 @@
   <version>0.5-SNAPSHOT</version>
   <packaging>pom</packaging>
   <description>A Reactor Project for all the Sonar .Net code quality projects</description>
-  <prerequisites>
-    <maven>2.1</maven>
-  </prerequisites>
   <inceptionYear>2009</inceptionYear>
   <licenses>
     <license>
