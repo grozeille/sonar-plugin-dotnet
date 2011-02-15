@@ -69,15 +69,7 @@ public class ProjectDependenciesSensor implements Sensor {
 
 				// find the referenced project in the Maven modules
 				Resource<?> subProject = VisualUtils.getProjectFromName(project,
-						vsProject.getAssemblyName());
-				
-				Resource<?> savedSubPrj = context
-						.getResource(subProject);
-				if (savedSubPrj == null) {
-					context.saveResource(subProject);
-					savedSubPrj = context.getResource(subProject);
-				}
-				subProject = savedSubPrj;
+						vsProject.getAssemblyName());				
 
 				// resolve project references
 				List<ProjectReference> projectReferences = vsProject
