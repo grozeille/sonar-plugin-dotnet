@@ -30,14 +30,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.Sensor;
 import org.sonar.api.batch.SensorContext;
-import org.sonar.api.batch.SonarIndex;
+import org.sonar.api.database.DatabaseSession;
+import org.sonar.api.database.model.Snapshot;
 import org.sonar.api.design.Dependency;
-import org.sonar.api.measures.CoreMetrics;
-import org.sonar.api.measures.Measure;
-import org.sonar.api.measures.PersistenceMode;
+import org.sonar.api.design.DependencyDto;
 import org.sonar.api.resources.Library;
 import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
+import org.sonar.batch.index.ResourcePersister;
 import org.sonar.plugin.dotnet.core.project.VisualUtils;
 
 public class BinaryDependenciesSensor implements Sensor {
@@ -45,10 +45,13 @@ public class BinaryDependenciesSensor implements Sensor {
 	private final static Logger log = LoggerFactory
 			.getLogger(BinaryDependenciesSensor.class);
 
-	private final SonarIndex index;
-
-	public BinaryDependenciesSensor(SonarIndex index) {
-		this.index = index;
+	private final ResourcePersister resourcePersister;
+	
+	private final DatabaseSession session;
+	
+	public BinaryDependenciesSensor(ResourcePersister resourcePersister, DatabaseSession session) {
+		  this.resourcePersister = resourcePersister;
+		  this.session = session;
 	}
 
 	@Override
@@ -63,32 +66,37 @@ public class BinaryDependenciesSensor implements Sensor {
 				Resource<?> subProject = VisualUtils.getProjectFromName(project,
 						vsProject.getAssemblyName());
 				
-				Resource<?> savedSubPrj = context
-						.getResource(subProject);
-				if (savedSubPrj == null) {
-					context.saveResource(subProject);
-					savedSubPrj = context.getResource(subProject);
-				}
-				subProject = savedSubPrj;
-				
 				// TODO find a way to get dependencies associated to assemblies
 				// CLRAssembly assembly = new CLRAssembly(vsProject);
 				// Resource<?> savedAssembly = context.getResource(assembly);
 				List<BinaryReference> binaryReferences = vsProject
 						.getBinaryReferences();
+				
+				// save dependencies to external assemblies
 				for (BinaryReference binaryReference : binaryReferences) {
 					Resource<?> lib = new Library(binaryReference
 							.getAssemblyName(), binaryReference.getVersion());
 
+					// save the assembly if needed
 					Resource<?> savedLib = context.getResource(lib);
 					if (savedLib == null) {
 						context.saveResource(lib);
 						savedLib = context.getResource(lib);
 					}
+					
+					// save the dependency
 					Dependency dependency = new Dependency(subProject, savedLib);
 					dependency.setUsage("compile");
 					dependency.setWeight(1);
 					context.saveDependency(dependency);
+					
+					// TODO: I know, it's a very ugly trick, but here we need to "attach" the dependency to the module, 
+					// instead of the parent Project, so we are doing a Hardcode Update on the Database  				
+					DependencyDto dependencyDto = session.getEntity(DependencyDto.class, dependency.getId());
+					Snapshot snapshot = resourcePersister.getSnapshot(subProject);
+					dependencyDto.setProjectSnapshotId(snapshot.getId());
+					session.save(dependencyDto);
+					session.commit();
 				/*
 					String json = "[{\"i\":"+savedLib.getId()+
 						",\"n\":\""+savedLib.getKey()+

@@ -25,7 +25,6 @@ package org.sonar.plugin.dotnet.core;
 
 import java.util.List;
 
-import org.apache.maven.dotnet.commons.project.BinaryReference;
 import org.apache.maven.dotnet.commons.project.DotNetProjectException;
 import org.apache.maven.dotnet.commons.project.ProjectReference;
 import org.apache.maven.dotnet.commons.project.VisualStudioProject;
@@ -34,14 +33,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.Sensor;
 import org.sonar.api.batch.SensorContext;
-import org.sonar.api.batch.SonarIndex;
+import org.sonar.api.database.DatabaseSession;
+import org.sonar.api.database.model.Snapshot;
 import org.sonar.api.design.Dependency;
-import org.sonar.api.measures.CoreMetrics;
-import org.sonar.api.measures.Measure;
-import org.sonar.api.measures.PersistenceMode;
-import org.sonar.api.resources.Library;
+import org.sonar.api.design.DependencyDto;
 import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
+import org.sonar.batch.index.ResourcePersister;
 import org.sonar.plugin.dotnet.core.project.VisualUtils;
 
 
@@ -49,11 +47,14 @@ public class ProjectDependenciesSensor implements Sensor {
 
 	private final static Logger log = LoggerFactory
 			.getLogger(BinaryDependenciesSensor.class);
-
-	private final SonarIndex index;
-
-	public ProjectDependenciesSensor(SonarIndex index) {
-		this.index = index;
+	
+	private final ResourcePersister resourcePersister;
+	
+	private final DatabaseSession session;
+	
+	public ProjectDependenciesSensor(ResourcePersister resourcePersister, DatabaseSession session) {
+		  this.resourcePersister = resourcePersister;
+		  this.session = session;
 	}
 
 	@Override
@@ -87,23 +88,25 @@ public class ProjectDependenciesSensor implements Sensor {
 					VisualStudioProject vsReferencedProject = solution
 							.getProject(projectReference.getGuid());
 
+					// the project should already exists
 					Resource<?> referencedProject = VisualUtils.getProjectFromName(
 							project, vsReferencedProject.getAssemblyName());
-
-					Resource<?> savedReferencedPrj = context
-							.getResource(referencedProject);
-					if (savedReferencedPrj == null) {
-						log.info("Saving resource"+savedReferencedPrj.toString());
-						context.saveResource(referencedProject);
-						savedReferencedPrj = context.getResource(referencedProject);
-					}
-					referencedProject = savedReferencedPrj;
 					
+					// save the dependency
 					Dependency dependency = new Dependency(subProject, referencedProject);
 					dependency.setUsage("compile");
 					dependency.setWeight(1);
 					context.saveDependency(dependency);
-					log.info("Saving dependency"+dependency.toString());
+					
+					// TODO: I know, it's a very ugly trick, but here we need to "attach" the dependency to the module, 
+					// instead of the parent Project, so we are doing a Hardcode Update on the Database  				
+					DependencyDto dependencyDto = session.getEntity(DependencyDto.class, dependency.getId());
+					Snapshot snapshot = resourcePersister.getSnapshot(subProject);
+					dependencyDto.setProjectSnapshotId(snapshot.getId());
+					session.save(dependencyDto);
+					session.commit();
+					
+					log.info("Saving dependency from "+subProject.getName()+" to "+referencedProject.getName());
 					
 /*
 					String json = "[{\"i\":"+referencedProject.getId()+
