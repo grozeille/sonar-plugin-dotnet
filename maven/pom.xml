@@ -13,9 +13,6 @@
   <version>0.5-SNAPSHOT</version>
   <packaging>pom</packaging>
   <description>A Reactor project for the .Net maven integration</description>
-  <prerequisites>
-    <maven>2.1</maven>
-  </prerequisites>
   <inceptionYear>2009</inceptionYear>
   <licenses>
     <license>
