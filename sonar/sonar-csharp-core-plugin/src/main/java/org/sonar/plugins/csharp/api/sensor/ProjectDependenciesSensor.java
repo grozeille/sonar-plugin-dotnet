@@ -20,117 +20,99 @@
 
 package org.sonar.plugins.csharp.api.sensor;
 
-import java.util.List;
+import java.io.File;
 
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.sonar.api.batch.Sensor;
 import org.sonar.api.batch.SensorContext;
-import org.sonar.api.design.Dependency;
-import org.sonar.api.resources.Library;
 import org.sonar.api.resources.Project;
-import org.sonar.api.resources.Resource;
-import org.sonar.dotnet.tools.commons.visualstudio.BinaryReference;
-import org.sonar.dotnet.tools.commons.visualstudio.ProjectReference;
-import org.sonar.dotnet.tools.commons.visualstudio.VisualStudioProject;
-import org.sonar.dotnet.tools.commons.visualstudio.VisualStudioSolution;
-import org.sonar.plugins.csharp.api.CSharp;
+import org.sonar.api.resources.ProjectFileSystem;
+import org.sonar.api.utils.SonarException;
+import org.sonar.dotnet.tools.commons.utils.FileFinder;
+import org.sonar.dotnet.tools.dependencyparser.DependencyParserCommandBuilder;
+import org.sonar.dotnet.tools.dependencyparser.DependencyParserException;
+import org.sonar.dotnet.tools.dependencyparser.DependencyParserRunner;
+import org.sonar.plugins.csharp.api.CSharpConfiguration;
+import org.sonar.plugins.csharp.api.CSharpConstants;
 import org.sonar.plugins.csharp.api.MicrosoftWindowsEnvironment;
+import org.sonar.plugins.csharp.dependency.DependencyParserConstants;
+import org.sonar.plugins.csharp.dependency.DependencyParserResultParser;
 
-public class ProjectDependenciesSensor implements Sensor {
+public class ProjectDependenciesSensor extends AbstractCSharpSensor {
 
-  private final static Logger log = LoggerFactory.getLogger(ProjectDependenciesSensor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ProjectDependenciesSensor.class);
 
-  private CSharp cSharp;
+  private CSharpConfiguration configuration;
 
-  private MicrosoftWindowsEnvironment microsoftWindowsEnvironment;
+  private ProjectFileSystem fileSystem;
 
-  public ProjectDependenciesSensor(CSharp cSharp, MicrosoftWindowsEnvironment microsoftWindowsEnvironment) {
-    this.cSharp = cSharp;
-    this.microsoftWindowsEnvironment = microsoftWindowsEnvironment;
+  private DependencyParserResultParser dependencyParserResultParser;
+
+  public ProjectDependenciesSensor(ProjectFileSystem fileSystem, MicrosoftWindowsEnvironment microsoftWindowsEnvironment, CSharpConfiguration configuration, DependencyParserResultParser dependencyParserResultParser) {
+    super(microsoftWindowsEnvironment, "DependencyParser", configuration.getString(DependencyParserConstants.MODE, ""));
+    this.configuration = configuration;
+    this.dependencyParserResultParser = dependencyParserResultParser;
+    this.fileSystem = fileSystem;
   }
 
   public void analyse(Project project, SensorContext context) {
 
-    VisualStudioSolution solution = microsoftWindowsEnvironment.getCurrentSolution();
-    //List<VisualStudioProject> projects = solution.getProjects();
+    dependencyParserResultParser.setEncoding(fileSystem.getSourceCharset());
+    dependencyParserResultParser.setContext(context);
+    dependencyParserResultParser.setProject(project);
 
-    VisualStudioProject vsProject = solution.getProjectFromSonarProject(project);
-    
-    // resolve dependencies for each projects of the solution
-    //for (VisualStudioProject vsProject : projects) {
+    final File reportFile;
+    File projectDir = project.getFileSystem().getBasedir();
+    String reportDefaultPath = getMicrosoftWindowsEnvironment().getWorkingDirectory() + "/" + DependencyParserConstants.DEPENDENCYPARSER_REPORT_XML;
 
-      // find the referenced project in the modules
-      //String projectKey = StringUtils.substringBefore(project.getKey(), ":") + ":" + StringUtils.deleteWhitespace(vsProject.getName());
-      //Resource<?> subProject = getProjectFromKey(project, projectKey);
+    if (MODE_REUSE_REPORT.equalsIgnoreCase(executionMode)) {
+      String reportPath = configuration.getString(DependencyParserConstants.REPORTS_PATH_KEY, reportDefaultPath);
+      reportFile = FileFinder.browse(projectDir, reportPath);
+      LOG.info("Reusing DependencyParser report: " + reportFile);
+    } else {
+      // run DependencyParser
+      try {
+        File tempDir = new File(getMicrosoftWindowsEnvironment().getCurrentSolution().getSolutionDir(), getMicrosoftWindowsEnvironment()
+            .getWorkingDirectory());
+        DependencyParserRunner runner = DependencyParserRunner.create(
+            configuration.getString(DependencyParserConstants.INSTALL_DIR_KEY, ""), tempDir.getAbsolutePath());
 
-      // resolve project references
-      List<ProjectReference> projectReferences = vsProject.getProjectReferences();
-      for (ProjectReference projectReference : projectReferences) {
-
-        // find the referenced project in the solution
-        VisualStudioProject vsReferencedProject = solution.getProject(projectReference.getGuid());
-
-        // the project should already exists
-        String referenceKey = StringUtils.substringBefore(project.getParent().getKey(), ":") + ":" + StringUtils.deleteWhitespace(vsReferencedProject.getName());
-        Resource<?> referencedProject = getProjectFromKey(project.getParent(), referenceKey);
-
-        // save the dependency
-        Dependency dependency = new Dependency(project, referencedProject);
-        dependency.setUsage("compile");
-        dependency.setWeight(1);
-        context.saveDependency(dependency);
-
-        log.info("Saving dependency from " + project.getName() + " to " + referencedProject.getName());
-
-        /*
-         * String json = "[{\"i\":"+referencedProject.getId()+
-         * ",\"n\":\""+referencedProject.getName()+
-         * "\",\"q\":\""+referencedProject.getQualifier()+"\",\"v\":[{}]";
-         * 
-         * Measure measure = new Measure(CoreMetrics.DEPENDENCY_MATRIX, json);
-         * measure.setPersistenceMode(PersistenceMode.DATABASE);
-         * context.saveMeasure(subProject, measure);
-         * log.info("Saving measure"+measure.toString());
-         */
-
-        // TODO: do it also for PRJ > Folder/Package > File dependencies
+        launchDependencyParser(project, runner);
+      } catch (DependencyParserException e) {
+        throw new SonarException("DependencyParser execution failed.", e);
       }
-
-      for (BinaryReference binaryReference : vsProject.getBinaryReferences()) {
-        String binaryKey = binaryReference.getAssemblyName();
-        Library library = new Library(binaryKey, binaryReference.getVersion());
-        library.setName(binaryReference.getAssemblyName()+" v"+binaryReference.getVersion());
-        Library found = context.getResource(library);
-        if(found == null){
-          context.index(library);
-        }
-        
-        // save the dependency
-        Dependency dependency = new Dependency(project, library);
-        dependency.setUsage("compile");
-        dependency.setWeight(1);
-        context.saveDependency(dependency);
-
-        log.info("Saving dependency from " + project.getName() + " to " + library.getName());
-      }
-
-    //}
-  }
-
-  public boolean shouldExecuteOnProject(Project project) {
-    return cSharp.equals(project.getLanguage()) && !project.isRoot();
-  }
-
-  private Resource<?> getProjectFromKey(Project parentProject, String projectKey) {
-    for (Project subProject : parentProject.getModules()) {
-      if (subProject.getKey().equals(projectKey)) {
-        return subProject;
-      }
+      reportFile = new File(projectDir, reportDefaultPath);
     }
 
-    return null;
+    // and analyse results
+    analyseResults(reportFile);
+  }
+
+  private void analyseResults(File reportFile) {
+    if (reportFile.exists()) {
+      LOG.debug("DependencyParser report found at location {}", reportFile);
+      dependencyParserResultParser.parse(reportFile);
+    } else {
+      LOG.warn("No DependencyParser report found for path {}", reportFile);
+    }
+  }
+
+  private void launchDependencyParser(Project project, DependencyParserRunner runner) throws DependencyParserException {
+    DependencyParserCommandBuilder builder = runner.createCommandBuilder(getVSSolution(), getVSProject(project));
+    builder.setReportFile(new File(fileSystem.getSonarWorkingDirectory(), DependencyParserConstants.DEPENDENCYPARSER_REPORT_XML));
+    builder.setBuildConfigurations(configuration.getString(CSharpConstants.BUILD_CONFIGURATIONS_KEY,
+        CSharpConstants.BUILD_CONFIGURATIONS_DEFVALUE));
+
+    // String[] assemblies = configuration.getStringArray("sonar.gendarme.assemblies");
+    // if (assemblies == null || assemblies.length == 0) {
+    // assemblies = configuration.getStringArray(CSharpConstants.ASSEMBLIES_TO_SCAN_KEY);
+    // } else {
+    // LOG.warn("Using deprecated key 'sonar.gendarme.assemblies', you should use instead " + CSharpConstants.ASSEMBLIES_TO_SCAN_KEY);
+    // }
+    //
+    // builder.setAssembliesToScan(assemblies);
+
+    runner.execute(builder, configuration.getInt(DependencyParserConstants.TIMEOUT_MINUTES_KEY, DependencyParserConstants.TIMEOUT_MINUTES_DEFVALUE));
   }
 
 }
