@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -52,19 +53,24 @@ public class VisualStudioProject {
   private File projectFile;
   private ArtifactType type;
   private String assemblyName;
+  private String assemblyVersion;
   private String realAssemblyName; // assembly name found in the csproj file no matter what
   private String rootNamespace;
+  private UUID projectGuid;
   private File debugOutputDir;
   private File releaseOutputDir;
   /** Output directory specified from maven */
   private String forcedOutputDir;
   private Map<String, File> buildConfOutputDirMap;
   private File directory;
+
   private boolean test;
   private boolean silverlightProject;
   private Map<File, SourceFile> sourceFileMap;
 
   private List<BinaryReference> binaryReferences = new ArrayList<BinaryReference>();
+
+  private List<ProjectReference> projectReferences = new ArrayList<ProjectReference>();
 
   /**
    * Builds a {@link VisualStudioProject} ...
@@ -94,7 +100,7 @@ public class VisualStudioProject {
 
       String filePath = canonicalFile.getPath();
       String directoryPath = canonicalDirectory.getPath();
-      if ( !filePath.startsWith(directoryPath)) {
+      if (!filePath.startsWith(directoryPath)) {
         // The file is not in the directory
         return null;
       }
@@ -134,6 +140,14 @@ public class VisualStudioProject {
     return this.type;
   }
 
+  public UUID getProjectGuid() {
+    return projectGuid;
+  }
+
+  public void setProjectGuid(UUID projectGuid) {
+    this.projectGuid = projectGuid;
+  }
+
   /**
    * Provides the location of the generated artifact(s) of this project according to the build configuration(s) used.
    * 
@@ -147,7 +161,7 @@ public class VisualStudioProject {
       // first trying to use forcedOutputDir as a relative path
       File assemblyDirectory = new File(directory, forcedOutputDir);
 
-      if ( !assemblyDirectory.exists()) {
+      if (!assemblyDirectory.exists()) {
         // path specified "forcedOutputDir" should be absolute,
         // not relative to the project root directory
         assemblyDirectory = new File(forcedOutputDir);
@@ -222,6 +236,14 @@ public class VisualStudioProject {
    */
   public String getAssemblyName() {
     return this.assemblyName;
+  }
+
+  public String getAssemblyVersion() {
+    return this.assemblyVersion;
+  }
+
+  public void setAssemblyVersion(String assemblyVersion) {
+    this.assemblyVersion = assemblyVersion;
   }
 
   /**
@@ -499,7 +521,7 @@ public class VisualStudioProject {
    * @return <code>true</code> if the project contains the file
    */
   public boolean contains(File file) {
-    if (file==null || !file.exists()) {
+    if (file == null || !file.exists()) {
       return false;
     }
     try {
@@ -537,8 +559,16 @@ public class VisualStudioProject {
     return binaryReferences;
   }
 
+  public List<ProjectReference> getProjectReferences() {
+    return projectReferences;
+  }
+
   void setBinaryReferences(List<BinaryReference> binaryReferences) {
     this.binaryReferences = binaryReferences;
+  }
+
+  public void setProjectReferences(List<ProjectReference> projectReferences) {
+    this.projectReferences = projectReferences;
   }
 
   void setBuildConfOutputDirMap(Map<String, File> buildConfOutputDirMap) {
