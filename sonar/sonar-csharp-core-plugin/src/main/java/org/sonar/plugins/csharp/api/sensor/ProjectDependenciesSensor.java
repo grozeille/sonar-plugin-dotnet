@@ -28,8 +28,10 @@ import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.Sensor;
 import org.sonar.api.batch.SensorContext;
 import org.sonar.api.design.Dependency;
+import org.sonar.api.resources.Library;
 import org.sonar.api.resources.Project;
 import org.sonar.api.resources.Resource;
+import org.sonar.dotnet.tools.commons.visualstudio.BinaryReference;
 import org.sonar.dotnet.tools.commons.visualstudio.ProjectReference;
 import org.sonar.dotnet.tools.commons.visualstudio.VisualStudioProject;
 import org.sonar.dotnet.tools.commons.visualstudio.VisualStudioSolution;
@@ -38,77 +40,97 @@ import org.sonar.plugins.csharp.api.MicrosoftWindowsEnvironment;
 
 public class ProjectDependenciesSensor implements Sensor {
 
-	private final static Logger log = LoggerFactory.getLogger(ProjectDependenciesSensor.class);
-	
-	private CSharp cSharp;
-	
-	private MicrosoftWindowsEnvironment microsoftWindowsEnvironment;
+  private final static Logger log = LoggerFactory.getLogger(ProjectDependenciesSensor.class);
 
-	public ProjectDependenciesSensor(CSharp cSharp, MicrosoftWindowsEnvironment microsoftWindowsEnvironment) {
-		this.cSharp = cSharp;
-		this.microsoftWindowsEnvironment = microsoftWindowsEnvironment;
-	}
+  private CSharp cSharp;
 
-	public void analyse(Project project, SensorContext context) {
-			
-			VisualStudioSolution solution = microsoftWindowsEnvironment.getCurrentSolution();
-			List<VisualStudioProject> projects = solution.getProjects();
-			
-			// resolve dependencies for each projects of the solution
-			for (VisualStudioProject vsProject : projects) {
+  private MicrosoftWindowsEnvironment microsoftWindowsEnvironment;
 
-				// find the referenced project in the modules
-				String projectKey = StringUtils.substringBefore(project.getKey(), ":") + ":" + StringUtils.deleteWhitespace(vsProject.getName());
-				Resource<?> subProject = getProjectFromKey(project, projectKey);
-
-				// resolve project references
-				List<ProjectReference> projectReferences = vsProject.getProjectReferences();
-				for (ProjectReference projectReference : projectReferences) {
-
-					// find the referenced project in the solution
-					VisualStudioProject vsReferencedProject = solution.getProject(projectReference.getGuid());
-
-					// the project should already exists
-					String referenceKey = StringUtils.substringBefore(project.getKey(), ":") + ":" + StringUtils.deleteWhitespace(vsReferencedProject.getName());
-					Resource<?> referencedProject =  getProjectFromKey(project, referenceKey);
-
-					// save the dependency
-					Dependency dependency = new Dependency(subProject, referencedProject);
-					dependency.setUsage("compile");
-					dependency.setWeight(1);
-					context.saveDependency(dependency);
-
-					log.info("Saving dependency from " + subProject.getName() + " to " + referencedProject.getName());
-
-					/*
-					 * String json = "[{\"i\":"+referencedProject.getId()+
-					 * ",\"n\":\""+referencedProject.getName()+
-					 * "\",\"q\":\""+referencedProject.getQualifier()+"\",\"v\":[{}]";
-					 * 
-					 * Measure measure = new Measure(CoreMetrics.DEPENDENCY_MATRIX, json);
-					 * measure.setPersistenceMode(PersistenceMode.DATABASE);
-					 * context.saveMeasure(subProject, measure);
-					 * log.info("Saving measure"+measure.toString());
-					 */
-
-					// TODO: do it also for PRJ > Folder/Package > File dependencies
-				}
-
-			}
-	}
-
-	public boolean shouldExecuteOnProject(Project project) {
-    return cSharp.equals(project.getLanguage()) && project.isRoot();
+  public ProjectDependenciesSensor(CSharp cSharp, MicrosoftWindowsEnvironment microsoftWindowsEnvironment) {
+    this.cSharp = cSharp;
+    this.microsoftWindowsEnvironment = microsoftWindowsEnvironment;
   }
-	
-	private Resource<?> getProjectFromKey(Project parentProject, String projectKey){
-		for(Project subProject : parentProject.getModules()){
-			if(subProject.getKey().equals(projectKey)){
-				return subProject;
-			}
-		}
-		
-		return null;
-	}
-	
+
+  public void analyse(Project project, SensorContext context) {
+
+    VisualStudioSolution solution = microsoftWindowsEnvironment.getCurrentSolution();
+    //List<VisualStudioProject> projects = solution.getProjects();
+
+    VisualStudioProject vsProject = solution.getProjectFromSonarProject(project);
+    
+    // resolve dependencies for each projects of the solution
+    //for (VisualStudioProject vsProject : projects) {
+
+      // find the referenced project in the modules
+      //String projectKey = StringUtils.substringBefore(project.getKey(), ":") + ":" + StringUtils.deleteWhitespace(vsProject.getName());
+      //Resource<?> subProject = getProjectFromKey(project, projectKey);
+
+      // resolve project references
+      List<ProjectReference> projectReferences = vsProject.getProjectReferences();
+      for (ProjectReference projectReference : projectReferences) {
+
+        // find the referenced project in the solution
+        VisualStudioProject vsReferencedProject = solution.getProject(projectReference.getGuid());
+
+        // the project should already exists
+        String referenceKey = StringUtils.substringBefore(project.getParent().getKey(), ":") + ":" + StringUtils.deleteWhitespace(vsReferencedProject.getName());
+        Resource<?> referencedProject = getProjectFromKey(project.getParent(), referenceKey);
+
+        // save the dependency
+        Dependency dependency = new Dependency(project, referencedProject);
+        dependency.setUsage("compile");
+        dependency.setWeight(1);
+        context.saveDependency(dependency);
+
+        log.info("Saving dependency from " + project.getName() + " to " + referencedProject.getName());
+
+        /*
+         * String json = "[{\"i\":"+referencedProject.getId()+
+         * ",\"n\":\""+referencedProject.getName()+
+         * "\",\"q\":\""+referencedProject.getQualifier()+"\",\"v\":[{}]";
+         * 
+         * Measure measure = new Measure(CoreMetrics.DEPENDENCY_MATRIX, json);
+         * measure.setPersistenceMode(PersistenceMode.DATABASE);
+         * context.saveMeasure(subProject, measure);
+         * log.info("Saving measure"+measure.toString());
+         */
+
+        // TODO: do it also for PRJ > Folder/Package > File dependencies
+      }
+
+      for (BinaryReference binaryReference : vsProject.getBinaryReferences()) {
+        String binaryKey = binaryReference.getAssemblyName();
+        Library library = new Library(binaryKey, binaryReference.getVersion());
+        library.setName(binaryReference.getAssemblyName()+" v"+binaryReference.getVersion());
+        Library found = context.getResource(library);
+        if(found == null){
+          context.index(library);
+        }
+        
+        // save the dependency
+        Dependency dependency = new Dependency(project, library);
+        dependency.setUsage("compile");
+        dependency.setWeight(1);
+        context.saveDependency(dependency);
+
+        log.info("Saving dependency from " + project.getName() + " to " + library.getName());
+      }
+
+    //}
+  }
+
+  public boolean shouldExecuteOnProject(Project project) {
+    return cSharp.equals(project.getLanguage()) && !project.isRoot();
+  }
+
+  private Resource<?> getProjectFromKey(Project parentProject, String projectKey) {
+    for (Project subProject : parentProject.getModules()) {
+      if (subProject.getKey().equals(projectKey)) {
+        return subProject;
+      }
+    }
+
+    return null;
+  }
+
 }

@@ -33,6 +33,7 @@ import org.sonar.api.batch.bootstrap.ProjectDefinition;
 import org.sonar.api.batch.bootstrap.ProjectReactor;
 import org.sonar.api.utils.SonarException;
 import org.sonar.dotnet.tools.commons.DotNetToolsException;
+import org.sonar.dotnet.tools.commons.visualstudio.BinaryReference;
 import org.sonar.dotnet.tools.commons.visualstudio.ModelFactory;
 import org.sonar.dotnet.tools.commons.visualstudio.SourceFile;
 import org.sonar.dotnet.tools.commons.visualstudio.VisualStudioProject;
@@ -106,7 +107,7 @@ public class VisualStudioProjectBuilder extends ProjectBuilder {
       ProjectDefinition subProject = ProjectDefinition.create((Properties) root.getProperties().clone())
           .setBaseDir(vsProject.getDirectory()).setWorkDir(new File(vsProject.getDirectory(), workDir)).setKey(projectKey)
           .setVersion(root.getVersion()).setName(vsProject.getName()).addContainerExtension(microsoftWindowsEnvironment);
-
+      
       if (vsProject.isTest()) {
         subProject.setTestDirs(".");
         for (SourceFile sourceFile : vsProject.getSourceFiles()) {
@@ -116,6 +117,10 @@ public class VisualStudioProjectBuilder extends ProjectBuilder {
         subProject.setSourceDirs(".");
         for (SourceFile sourceFile : vsProject.getSourceFiles()) {
           subProject.addSourceFiles(sourceFile.getFile());
+        }
+        
+        for(BinaryReference ref : vsProject.getBinaryReferences()){
+          subProject.addLibrary(ref.getAssemblyName());
         }
       }
 

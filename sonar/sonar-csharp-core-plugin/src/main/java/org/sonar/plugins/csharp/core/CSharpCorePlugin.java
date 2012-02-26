@@ -93,7 +93,7 @@ public class CSharpCorePlugin extends SonarPlugin {
     // Sensors
     extensions.add(CSharpSourceImporter.class);
     extensions.add(ProjectDependenciesSensor.class);
-
+ 
     return extensions;
   }
 }
