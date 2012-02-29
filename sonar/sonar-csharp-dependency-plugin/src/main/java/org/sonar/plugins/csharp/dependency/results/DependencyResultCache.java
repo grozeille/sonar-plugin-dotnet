@@ -1,5 +1,5 @@
 /*
- * Sonar C# Plugin :: Core
+ * Sonar C# Plugin :: Dependency
  * Copyright (C) 2010 Jose Chillan, Alexandre Victoor and SonarSource
  * dev@sonar.codehaus.org
  *
