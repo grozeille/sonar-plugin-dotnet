@@ -27,7 +27,6 @@ import org.sonar.api.Extension;
 import org.sonar.api.Properties;
 import org.sonar.api.Property;
 import org.sonar.api.SonarPlugin;
-import org.sonar.plugins.csharp.dependency.results.DependencyResultCache;
 import org.sonar.plugins.csharp.dependency.results.DependencyResultParser;
 
 @Properties({
@@ -49,9 +48,8 @@ public class DependencyPlugin extends SonarPlugin {
   public List<Class<? extends Extension>> getExtensions() {
     List<Class<? extends Extension>> list = new ArrayList<Class<? extends Extension>>();
     list.add(DependencySensor.class);
-
+    
     list.add(DependencyResultParser.class);
-    list.add(DependencyResultCache.class);
     
     return list;
   }

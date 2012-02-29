@@ -59,40 +59,35 @@ public class DependencySensor extends AbstractCSharpSensor {
 
   public void analyse(Project project, SensorContext context) {
 
-    if (project.isRoot()) {
-      this.dependencyParserResultParser.commitTypeDependencies();
-    }
-    else {
-      dependencyParserResultParser.setEncoding(fileSystem.getSourceCharset());
-      dependencyParserResultParser.setContext(context);
-      dependencyParserResultParser.setProject(project);
+    dependencyParserResultParser.setContext(context);
+    dependencyParserResultParser.setEncoding(fileSystem.getSourceCharset());
+    dependencyParserResultParser.setProject(project);
 
-      final File reportFile;
-      File projectDir = project.getFileSystem().getBasedir();
-      String reportDefaultPath = getMicrosoftWindowsEnvironment().getWorkingDirectory() + "/" + DependencyConstants.DEPENDENCYPARSER_REPORT_XML;
+    final File reportFile;
+    File projectDir = project.getFileSystem().getBasedir();
+    String reportDefaultPath = getMicrosoftWindowsEnvironment().getWorkingDirectory() + "/" + DependencyConstants.DEPENDENCYPARSER_REPORT_XML;
 
-      if (MODE_REUSE_REPORT.equalsIgnoreCase(executionMode)) {
-        String reportPath = configuration.getString(DependencyConstants.REPORTS_PATH_KEY, reportDefaultPath);
-        reportFile = FileFinder.browse(projectDir, reportPath);
-        LOG.info("Reusing DependencyParser report: " + reportFile);
-      } else {
-        // run DependencyParser
-        try {
-          File tempDir = new File(getMicrosoftWindowsEnvironment().getCurrentSolution().getSolutionDir(), getMicrosoftWindowsEnvironment()
-              .getWorkingDirectory());
-          DependencyParserRunner runner = DependencyParserRunner.create(
-              configuration.getString(DependencyConstants.INSTALL_DIR_KEY, ""), tempDir.getAbsolutePath());
+    if (MODE_REUSE_REPORT.equalsIgnoreCase(executionMode)) {
+      String reportPath = configuration.getString(DependencyConstants.REPORTS_PATH_KEY, reportDefaultPath);
+      reportFile = FileFinder.browse(projectDir, reportPath);
+      LOG.info("Reusing DependencyParser report: " + reportFile);
+    } else {
+      // run DependencyParser
+      try {
+        File tempDir = new File(getMicrosoftWindowsEnvironment().getCurrentSolution().getSolutionDir(), getMicrosoftWindowsEnvironment()
+            .getWorkingDirectory());
+        DependencyParserRunner runner = DependencyParserRunner.create(
+            configuration.getString(DependencyConstants.INSTALL_DIR_KEY, ""), tempDir.getAbsolutePath());
 
-          launchDependencyParser(project, runner);
-        } catch (DependencyParserException e) {
-          throw new SonarException("DependencyParser execution failed.", e);
-        }
-        reportFile = new File(projectDir, reportDefaultPath);
+        launchDependencyParser(project, runner);
+      } catch (DependencyParserException e) {
+        throw new SonarException("DependencyParser execution failed.", e);
       }
-
-      // and analyse results
-      analyseResults(reportFile);
+      reportFile = new File(projectDir, reportDefaultPath);
     }
+
+    // and analyse results
+    analyseResults(reportFile);
   }
 
   private void analyseResults(File reportFile) {
@@ -124,7 +119,7 @@ public class DependencySensor extends AbstractCSharpSensor {
 
   public boolean shouldExecuteOnProject(Project project) {
     if (project.isRoot()) {
-      return CSharpConstants.LANGUAGE_KEY.equals(project.getLanguageKey());
+      return false;
     }
     boolean skipMode = MODE_SKIP.equalsIgnoreCase(executionMode);
     if (skipMode) {

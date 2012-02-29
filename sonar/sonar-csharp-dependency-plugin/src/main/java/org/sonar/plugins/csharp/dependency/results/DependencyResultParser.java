@@ -24,10 +24,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -59,12 +55,9 @@ public class DependencyResultParser extends AbstractStaxParser implements BatchE
 
   private SensorContext context;
 
-  private DependencyResultCache dependencyResultCache;
-  
-  public DependencyResultParser(CSharpResourcesBridge csharpResourcesBridge, DependencyResultCache dependencyResultCache) {
+  public DependencyResultParser(CSharpResourcesBridge csharpResourcesBridge) {
     super();
     this.csharpResourcesBridge = csharpResourcesBridge;
-    this.dependencyResultCache = dependencyResultCache;
   }
 
   public Project getProject() {
@@ -144,11 +137,9 @@ public class DependencyResultParser extends AbstractStaxParser implements BatchE
         Resource<?> to = getResource(referenceName, referenceVersion);
 
         // keep the dependency in cache
-        String key = from.getKey() + "\n" + to.getKey();
         Dependency dependency = new Dependency(from, to);
         dependency.setUsage("compile");
         dependency.setWeight(1);
-        dependencyResultCache.getProjectDependencyMap().put(key, dependency);
         context.saveDependency(dependency);
         
         LOG.info("Saving dependency from " + from.getName() + " to " + to.getName());
@@ -168,23 +159,51 @@ public class DependencyResultParser extends AbstractStaxParser implements BatchE
             String toType = toCursor.getAttrValue("fullname");
 
             Resource<?> fromResource = csharpResourcesBridge.getFromTypeName(fromType);
+            Resource<?> toResource = csharpResourcesBridge.getFromTypeName(toType);
 
-            if (fromResource != null) {
+            // check if the source is not filtered
+            if (fromResource != null && toResource != null) {
 
-              // save the dependency in cache
-              DependencyItemResult itemResult = dependencyResultCache.getTypeDependencyMap().get(fromType);
-              if (itemResult == null) {
-                itemResult = new DependencyItemResult();
-                dependencyResultCache.getTypeDependencyMap().put(fromType, itemResult);
+              // get the real resource
+              fromResource = context.getResource(fromResource);
+              toResource = context.getResource(toResource);
+
+              // get the parent folder
+              Resource<?> fromParentFolderResource = (Resource<?>)fromResource.getParent();
+              Resource<?> toParentFolderResource = (Resource<?>)toResource.getParent();
+              
+              // find the folder to folder dependency
+              Dependency folderDependency = findDependency(fromParentFolderResource, toParentFolderResource);
+              if(folderDependency == null){
+                folderDependency = new Dependency(fromParentFolderResource, toParentFolderResource);
+                folderDependency.setUsage("USES");
               }
-
-              itemResult.setFrom(fromResource);
-              itemResult.getToList().add(toType);
+              
+              // save it
+              folderDependency.setWeight(folderDependency.getWeight()+1);
+              context.saveDependency(folderDependency);
+              
+              // save the file to file dependency
+              Dependency fileDependency = new Dependency(fromResource, toResource);
+              fileDependency.setParent(folderDependency);
+              fileDependency.setUsage("USES");
+              fileDependency.setWeight(1);
+              context.saveDependency(fileDependency);
             }
           }
         }
       }
     }
+  }
+  
+  private Dependency findDependency(Resource<?> from, Resource<?> to){
+    for(Dependency d : context.getDependencies()){
+      if(d.getFrom().equals(from) && d.getTo().equals(to)){
+        return d;
+      }
+    }
+    
+    return null;
   }
 
   private Resource<?> getProjectFromKey(Project parentProject, String projectKey) {
@@ -218,84 +237,5 @@ public class DependencyResultParser extends AbstractStaxParser implements BatchE
     }
 
     return result;
-  }
-
-  public void commitTypeDependencies() {
-    Map<String, Dependency> folderDependencyMap = new HashMap<String, Dependency>();
-    List<Dependency> fileDependencyList = new ArrayList<Dependency>();
-
-    for (DependencyItemResult item : dependencyResultCache.getTypeDependencyMap().values()) {
-      for (String toType : item.getToList()) {
-        Resource<?> toResource = csharpResourcesBridge.getFromTypeName(toType);
-
-        if (toResource != null) {
-          
-          // get the parent folder
-          Resource<?> parentFolderFrom = (Resource<?>) item.getFrom().getParent();
-          Resource<?> parentFolderTo = (Resource<?>) toResource.getParent();
-
-          // get the parent project
-          Resource<?> parentProjectFrom = (Resource<?>) parentFolderFrom.getParent();
-          Resource<?> parentProjectTo = (Resource<?>) parentFolderTo.getParent();
-
-          // find the project to project dependency
-          Dependency projectDependency = null;
-          if (parentFolderFrom != parentFolderTo) {
-            String parentProjectKey = parentProjectFrom.getKey() + "\n" + parentProjectTo.getKey();
-            projectDependency = dependencyResultCache.getProjectDependencyMap().get(parentProjectKey);
-            if (projectDependency == null) {
-              // should not happend!
-              LOG.warn("Unknown projects: " + parentProjectFrom.getKey() + " and " + parentProjectTo.getKey());
-            }
-            projectDependency.setWeight(projectDependency.getWeight() + 1);
-          }
-
-          // create the folder to folder dependency
-          Dependency folderDependency = null;
-          if (parentFolderFrom != parentFolderTo) {
-            
-            String parentFolderKey = parentFolderFrom.getKey() + "\n" + parentFolderTo.getKey();
-            folderDependency = folderDependencyMap.get(parentFolderKey);
-            if (folderDependency == null) {
-              folderDependency = new Dependency(parentFolderFrom, parentFolderTo);
-              folderDependency.setUsage("USES");
-              folderDependency.setParent(projectDependency);
-              folderDependency.setWeight(1);
-              folderDependencyMap.put(parentFolderKey, folderDependency);
-            }
-            else {
-              folderDependency.setWeight(folderDependency.getWeight() + 1);
-            }            
-          }
-          
-          // create the file to file dependency
-          Dependency fileDependency = new Dependency(item.getFrom(), toResource);
-          fileDependency.setUsage("USES");
-          fileDependency.setParent(folderDependency);
-          fileDependency.setWeight(1); // TODO : the XML contains only 1 reference, change it to contains the numbers
-          
-          fileDependencyList.add(fileDependency);
-        }
-      }
-    }
-    
-    // save all
-    for(Dependency projectDependency : dependencyResultCache.getProjectDependencyMap().values()){
-      context.saveDependency(projectDependency);
-
-      LOG.info("Updating dependency from " + projectDependency.getFrom().getName() + " to " + projectDependency.getTo().getName());
-    }
-    
-    for(Dependency folderDependency : folderDependencyMap.values()){
-      context.saveDependency(folderDependency);
-
-      LOG.info("Saving dependency from " + folderDependency.getFrom().getName() + " to " + folderDependency.getTo().getName());
-    }
-    
-    for(Dependency fileDependency : fileDependencyList){
-      context.saveDependency(fileDependency);
-
-      LOG.info("Saving dependency from " + fileDependency.getFrom().getName() + " to " + fileDependency.getTo().getName());
-    }
   }
 }
