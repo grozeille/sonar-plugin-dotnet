@@ -1,5 +1,5 @@
 /*
- * Sonar C# Plugin :: Core
+ * Sonar C# Plugin :: Dependency
  * Copyright (C) 2010 Jose Chillan, Alexandre Victoor and SonarSource
  * dev@sonar.codehaus.org
  *
@@ -20,9 +20,9 @@
 
 package org.sonar.plugins.csharp.dependency;
 
-public final class DependencyParserConstants {
+public final class DependencyConstants {
 
-  private DependencyParserConstants() {
+  private DependencyConstants() {
   }
   
   public static final String DEPENDENCYPARSER_REPORT_XML = "dependencyparser-report.xml";

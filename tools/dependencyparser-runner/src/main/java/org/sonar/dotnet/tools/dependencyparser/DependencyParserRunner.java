@@ -40,7 +40,7 @@ public class DependencyParserRunner { // NOSONAR : can't mock it otherwise
 
   private static final String DEPENDENCYPARSER_EXECUTABLE = "DependencyParser.exe";
   private static final long MINUTES_TO_MILLISECONDS = 60000;
-  private static final String EMBEDDED_VERSION = "1.0";
+  private static final String EMBEDDED_VERSION = "1.1";
 
   private File dependencyParserExecutable;
   private VisualStudioProject vsProject;

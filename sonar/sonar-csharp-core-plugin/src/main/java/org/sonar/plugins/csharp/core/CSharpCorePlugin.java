@@ -33,8 +33,6 @@ import org.sonar.plugins.csharp.api.CSharpConstants;
 import org.sonar.plugins.csharp.api.CSharpResourcesBridge;
 import org.sonar.plugins.csharp.api.MicrosoftWindowsEnvironment;
 import org.sonar.plugins.csharp.api.ResourceHelper;
-import org.sonar.plugins.csharp.api.sensor.ProjectDependenciesSensor;
-import org.sonar.plugins.csharp.dependency.DependencyParserResultParser;
 
 /**
  * C# Core plugin class.
@@ -93,8 +91,6 @@ public class CSharpCorePlugin extends SonarPlugin {
 
     // Sensors
     extensions.add(CSharpSourceImporter.class);
-    extensions.add(DependencyParserResultParser.class);
-    extensions.add(ProjectDependenciesSensor.class);
  
     return extensions;
   }
