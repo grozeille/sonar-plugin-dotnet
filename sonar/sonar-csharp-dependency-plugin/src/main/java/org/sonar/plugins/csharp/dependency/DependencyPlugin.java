@@ -50,6 +50,7 @@ public class DependencyPlugin extends SonarPlugin {
     list.add(DependencySensor.class);
     
     list.add(DependencyResultParser.class);
+    list.add(CSharpDsmDecorator.class);
     
     return list;
   }
